@@ -1,5 +1,6 @@
 flask
 flask-cors
 yfinance
+flake8
 pytest
 pytest-flask
