@@ -1,2 +1,6 @@
 flask
+flask_cors
+yfinance
 flake8
+pytest
+pytest-mock
