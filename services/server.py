@@ -8,8 +8,9 @@ CORS(app)
 
 @app.route('/ticker/<string:ticker>')
 def home(ticker):
-    data = get_ticker(yf, ticker + ".SA")
+    data = get_ticker(yf, ticker)
     return jsonify(data)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+def create_app():
+    return app

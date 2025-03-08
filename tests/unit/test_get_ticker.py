@@ -1,5 +1,4 @@
-import pytest
-from ...get_ticker import get_ticker
+from ...services.get_ticker import get_ticker
 
 def test_get_ticker(mocker):
     yf = mocker.Mock()
