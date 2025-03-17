@@ -1,8 +1,10 @@
 gunicorn
+python-dotenv
 flask
 flask-cors
 yfinance
 flake8
+redis
 pytest
 pytest-mock
 pytest-flask

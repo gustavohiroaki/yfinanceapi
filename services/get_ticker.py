@@ -1,7 +1,13 @@
 import yfinance as yf
+import redis
 
-def get_ticker(yf, ticker):
+def get_ticker(yf, cache, ticker):
+    cached = cache.get( ticker)
+    if cached:
+        return cached
     data = yf.Ticker(ticker)
+    if data.info:
+        cache.set(ticker, data.info)
     return data.info
 
 if __name__ == '__main__':
