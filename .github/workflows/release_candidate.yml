@@ -1,0 +1,95 @@
+name: Release Candidate
+
+on:
+  pull_request: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tagExists: ${{ steps.tag_verification.outputs.tagExists }}
+      version: ${{ steps.extract_version.outputs.version }}
+      containsRc: ${{ steps.contains_rc.outputs.containsRc }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: extract_version
+        id: extract_version
+        run: |
+          VERSION=$(grep -oP '(?<=__version__ = ")[^"]+' __init__.py)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Contains rc
+        id: contains_rc
+        run: |
+          if [[ ${{ steps.extract_version.outputs.version }} == *"rc"* ]]; then
+            echo "containsRc=true" >> $GITHUB_OUTPUT
+          else
+            echo "containsRc=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Test with pytest
+        run: |
+          pytest
+      - name: Docker tag verification
+        id: tag_verification
+        run: |
+          TAG_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/yfinanceapi/tags/${{ steps.extract_version.outputs.version }})
+          if [ "$TAG_EXISTS" -eq 200 ]; then
+            echo "tagExists=true" >> $GITHUB_OUTPUT
+          else
+            echo "tagExists=false" >> $GITHUB_OUTPUT
+          fi
+
+  create_release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: needs.build.outputs.tagExists == 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create tag
+        uses: actions/github-script@v5
+        with:
+          script: |
+            if (${{ needs.build.outputs.containsRc }} === 'true') {
+              github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'refs/tags/v${{ needs.build.outputs.version }}',
+                sha: context.sha
+              })
+            } else {
+              echo "Release candidate versions are not allowed in CI." >&2
+              exit 1
+            }
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/yfinanceapi:v${{ needs.build.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/yfinanceapi:latest
